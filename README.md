@@ -270,3 +270,11 @@ user@protostar:/opt/protostar/bin$ ./stack4 < /tmp/s4.txt
 code flow successfully changed
 user@protostar:/opt/protostar/bin$
 ```
+Stack5 :
+   Solution uploaded. Writeup todo
+
+Stack6 :
+   //TODO
+
+Stack7 :
+   //TODO
